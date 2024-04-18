@@ -1,0 +1,146 @@
+---
+title: "SDS 315 HW9"
+author: "Preston Bui"
+date: "2024-04-18"
+output: pdf_document
+---
+
+
+EID: ppb434
+
+Github Repo: [https://github.com/PrestonBui/SDS315-HW9](https://github.com/PrestonBui/SDS315-HW9)
+
+
+```{r message = FALSE, echo = FALSE}
+library(tidyverse)
+library(janitor)
+library(ggplot2)
+library(MatchIt)
+library(moderndive)
+
+data <- read_csv("~/Downloads/turnout.csv")
+```
+
+# **Problem 1**
+### **Part A**
+
+```{r echo = FALSE}
+prop_voted_gotv <- data %>%
+  filter(GOTV_call == 1) %>%
+  summarize(proportion = mean(voted1998))
+
+prop_voted_no_gotv <- data %>%
+  filter(GOTV_call == 0) %>%
+  summarize(proportion = mean(voted1998))
+
+prop_diff <- prop_voted_gotv$proportion - prop_voted_no_gotv$proportion
+se_diff <- sqrt(
+  (prop_voted_gotv$proportion * (1 - prop_voted_gotv$proportion) / nrow(data[data$GOTV_call == 1,])) +
+  (prop_voted_no_gotv$proportion * (1 - prop_voted_no_gotv$proportion) / nrow(data[data$GOTV_call == 0,]))
+)
+```
+
+The preliminary analysis indicates that recipients of the GOTV call were `r round(100 * (prop_voted_gotv$proportion - prop_voted_no_gotv$proportion), 2)`% more likely to have voted in the 1998 Congressional election compared to those who did not receive a call. This finding is based on the observed proportion of voters among GOTV call recipients (`r round(100 * prop_voted_gotv$proportion, 2)`%) versus the proportion among non-recipients (`r round(100 * prop_voted_no_gotv$proportion, 2)`%).
+
+
+### **Part B**
+```{r echo = FALSE}
+summary_stats <- data %>%
+  group_by(GOTV_call) %>%
+  summarize(across(c(voted1996, AGE, MAJORPTY), list(mean = mean, sd = sd)))
+
+data %>%
+  ggplot(aes(x = factor(GOTV_call), fill = factor(voted1996))) +
+  geom_bar(position = "fill") +
+  labs(x = "GOTV Call Received", y = "Proportion", fill = "Voted in 1996")
+```
+
+The bar graph shows that individuals who received a GOTV call in 1998 are more likely to have voted in 1996, suggesting that past voting behavior may be related to receiving such calls.
+
+### **Part C**
+```{r echo = FALSE}
+match_data <- matchit(GOTV_call ~ voted1996 + AGE + MAJORPTY, 
+                      data = data, 
+                      method = "nearest", 
+                      ratio = 5)
+
+balance <- summary(match_data)
+
+matched <- match.data(match_data)
+
+prop_voted_gotv_matched <- mean(matched$voted1998[matched$GOTV_call == 1])
+prop_voted_no_gotv_matched <- mean(matched$voted1998[matched$GOTV_call == 0])
+
+prop_diff_matched <- prop_voted_gotv_matched - prop_voted_no_gotv_matched
+se_diff_matched <- sqrt(
+  (prop_voted_gotv_matched * (1 - prop_voted_gotv_matched) / sum(matched$GOTV_call == 1)) +
+  (prop_voted_no_gotv_matched * (1 - prop_voted_no_gotv_matched) / sum(matched$GOTV_call == 0))
+)
+
+ci_lower_matched <- prop_diff_matched - 1.96 * se_diff_matched
+ci_upper_matched <- prop_diff_matched + 1.96 * se_diff_matched
+
+results <- data.frame(
+  Proportion_GOTV = prop_voted_gotv_matched,
+  Proportion_no_GOTV = prop_voted_no_gotv_matched,
+  CI_lower = ci_lower_matched,
+  CI_upper = ci_upper_matched
+)
+
+```
+
+Based on the matched sample analysis, the proportion of individuals who received a GOTV call and voted in 1998 is `r round(100 * prop_voted_gotv_matched, 2)`%, while the proportion of those who did not receive a GOTV call and voted is `r round(100 * prop_voted_no_gotv_matched, 2)`%. The matched analysis suggests that the GOTV call has an estimated effect of increasing voting likelihood by `r round(100 * prop_diff_matched, 2)` percentage points, with a 95% confidence interval for this difference ranging from `r round(100 * ci_lower_matched, 2)`% to `r round(100 * ci_upper_matched, 2)`%. These results imply that the GOTV call campaign was effective in increasing voter turnout in the 1998 election.
+
+
+# **Problem 2**
+### **Part A**
+
+```{r echo = FALSE}
+solder <- read.csv("~/Downloads/solder.csv")
+
+ggplot(solder, aes(x = Opening, y = skips)) +
+  geom_boxplot() +
+  labs(title = "Effect of Opening Size on Number of Skips",
+       y = "Number of Skips",
+       x = "Opening Size")
+```
+
+This boxplot is displaying the number of solder skips across different sizes of the opening on the solder gun. The categories include small (S), medium (M), and large (L) openings. It appears that small opening sizes are associated with a higher median number of skips.
+
+```{r echo = FALSE}
+ggplot(solder, aes(x = Solder, y = skips)) +
+  geom_boxplot() +
+  labs(title = "Effect of Solder Thickness on Number of Skips",
+       y = "Number of Skips",
+       x = "Solder Thickness")
+```
+
+This boxplot is showing the number of solder skips for circuit boards made with thick and thin solder. The median number of skips is lower for boards soldered with thick alloy, indicating that solder thickness may play a role in manufacturing quality.
+
+### **Part B**
+
+```{r echo = FALSE}
+model <- lm(skips ~ Opening + Solder + Opening:Solder, data = solder)
+
+regression_table <- get_regression_table(model, conf.level = 0.95, digits = 2)
+
+regression_table
+
+```
+
+### **Part C**
+- **Intercept (0.39):** The estimated baseline number of skips is 0.39 when Opening and Solder are at their reference levels, although this is not statistically significant (p = 0.45).
+
+- **Opening: M (2.41):** Changing from the reference Opening size to medium is associated with an estimated increase of 2.41 in the number of skips (95% CI: 0.96 to 3.85), which is statistically significant.
+
+- **Opening: S (5.13):** Changing from the reference Opening size to small is associated with an estimated increase of 5.13 in the number of skips (95% CI: 3.68 to 6.57), which is statistically significant.
+
+- **Solder: Thin (2.28):** Using thin Solder compared to thick is associated with an estimated increase of 2.28 in the number of skips (95% CI: 0.84 to 3.72), which is statistically significant.
+
+- **Opening: M:SolderThin (-0.74):** There is a non-significant interaction effect between medium Opening and thin Solder, indicating a decrease of 0.74 in the number of skips (95% CI: -2.78 to 1.3), but this is not statistically significant (p = 0.48).
+
+- **Opening: S:SolderThin (9.65):** The interaction between small Opening and thin Solder shows a significant increase of 9.65 in the number of skips (95% CI: 7.61 to 11.7), which indicates a significant interaction effect (p = 0.00).
+
+### **Part D**
+Based on the regression analysis, the recommendation for AT&T would be to use a medium Opening size with thick Solder. This combination is suggested because the regression coefficient for medium Opening size is positive but smaller than the coefficient for small Opening size, indicating fewer skips than with a small Opening. Additionally, the positive coefficient for thin Solder indicates more skips than with thick Solder. There is no significant interaction effect that suggests a different combination would be better for reducing skips in the manufacturing process. Thus, medium Opening with thick Solder seems to be the best available option for minimizing flaws.
+
